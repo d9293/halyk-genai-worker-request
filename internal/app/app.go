@@ -10,12 +10,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/d9293/halyk-genai-worker-request/internal/client/ai"
 	"github.com/d9293/halyk-genai-worker-request/internal/client/integrator"
 	"github.com/d9293/halyk-genai-worker-request/internal/config"
 	"github.com/d9293/halyk-genai-worker-request/internal/runner"
 	"github.com/d9293/halyk-genai-worker-request/internal/source"
 	"github.com/d9293/halyk-genai-worker-request/internal/storage/s3"
 	"github.com/d9293/halyk-genai-worker-request/internal/usecase/document"
+	"github.com/d9293/halyk-genai-worker-request/internal/usecase/submission"
 )
 
 // loop is one independent worker loop, e.g. copying documents or sending to AI.
@@ -60,8 +62,26 @@ func Run(ctx context.Context, cfg config.Config) error {
 		HeaderTimeout: cfg.Documents.SourceHeaderTimeout,
 	}), storage)
 
-	// The submission loop is added in the next step.
-	loops := []loop{{name: "documents", step: documents.Step}}
+	aiClient, err := ai.New(ai.Config{
+		BaseURLs: map[string]string{
+			"REGISTER_COMPARE": cfg.AI.RegisterCompareURL,
+			"SOCIAL_MEDIA":     cfg.AI.SocialMediaURL,
+		},
+		Timeout: cfg.AI.Timeout,
+	})
+	if err != nil {
+		return err
+	}
+	submissions := submission.NewLoop(submission.Config{
+		BatchSize:  cfg.Submissions.BatchSize,
+		Workers:    cfg.Submissions.Workers,
+		RenewEvery: cfg.Submissions.RenewEvery,
+	}, api, aiClient)
+
+	loops := []loop{
+		{name: "documents", step: documents.Step},
+		{name: "submissions", step: submissions.Step},
+	}
 
 	health := &http.Server{
 		Addr:              ":" + cfg.HealthPort,

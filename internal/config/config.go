@@ -19,10 +19,29 @@ type Config struct {
 	// Defaults to the host name, which is the pod name in Kubernetes.
 	WorkerID string `env:"WORKER_ID"`
 
-	Integrator IntegratorConfig
-	Loop       LoopConfig
-	Documents  DocumentsConfig
-	S3         S3Config
+	Integrator  IntegratorConfig
+	Loop        LoopConfig
+	Documents   DocumentsConfig
+	S3          S3Config
+	Submissions SubmissionsConfig
+	AI          AIConfig
+}
+
+// SubmissionsConfig controls sending prepared tasks to AI.
+type SubmissionsConfig struct {
+	// BatchSize tasks are claimed per round; Workers of them are sent at once.
+	BatchSize int `env:"SUBMISSION_BATCH_SIZE,required"`
+	Workers   int `env:"SUBMISSION_WORKERS,required"`
+	// RenewEvery extends the claim while a POST is in progress.
+	RenewEvery time.Duration `env:"SUBMISSION_RENEW_EVERY,required"`
+}
+
+// AIConfig is where the AI team's services are, one base URL per operation.
+type AIConfig struct {
+	RegisterCompareURL string `env:"AI_REGISTER_COMPARE_URL,required"`
+	SocialMediaURL     string `env:"AI_SOCIAL_MEDIA_URL,required"`
+	// Timeout of one POST. Keep it well under the claim lease (60s).
+	Timeout time.Duration `env:"AI_TIMEOUT,required"`
 }
 
 // DocumentsConfig controls copying documents Attstore → S3.
