@@ -10,8 +10,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/d9293/halyk-genai-worker-request/internal/client/integrator"
 	"github.com/d9293/halyk-genai-worker-request/internal/config"
 	"github.com/d9293/halyk-genai-worker-request/internal/runner"
+	"github.com/d9293/halyk-genai-worker-request/internal/source"
+	"github.com/d9293/halyk-genai-worker-request/internal/storage/s3"
+	"github.com/d9293/halyk-genai-worker-request/internal/usecase/document"
 )
 
 // loop is one independent worker loop, e.g. copying documents or sending to AI.
@@ -24,8 +28,40 @@ type loop struct {
 // down in order: stop claiming new work, let work in progress finish for up to
 // ShutdownGrace, then cancel what is left.
 func Run(ctx context.Context, cfg config.Config) error {
-	// The document and submission loops are added in the next steps.
-	var loops []loop
+	api := integrator.New(integrator.Config{
+		BaseURL:    cfg.Integrator.URL,
+		Timeout:    cfg.Integrator.Timeout,
+		Retries:    cfg.Integrator.Retries,
+		RetryDelay: cfg.Integrator.RetryDelay,
+		WorkerID:   cfg.WorkerID,
+	})
+
+	storeCtx, cancelStore := context.WithTimeout(ctx, 10*time.Second)
+	defer cancelStore()
+	storage, err := s3.New(storeCtx, s3.Config{
+		Endpoint:        cfg.S3.Endpoint,
+		Region:          cfg.S3.Region,
+		Bucket:          cfg.S3.Bucket,
+		AccessKeyID:     cfg.S3.AccessKeyID,
+		SecretAccessKey: cfg.S3.SecretAccessKey,
+		PartSize:        cfg.S3.PartSize,
+	})
+	if err != nil {
+		return err
+	}
+
+	documents := document.NewLoop(document.Config{
+		BatchSize:       cfg.Documents.BatchSize,
+		Workers:         cfg.Documents.Workers,
+		RenewEvery:      cfg.Documents.RenewEvery,
+		MaxCopyDuration: cfg.Documents.MaxCopyDuration,
+	}, api, source.New(source.Config{
+		MaxBytes:      cfg.Documents.MaxBytes,
+		HeaderTimeout: cfg.Documents.SourceHeaderTimeout,
+	}), storage)
+
+	// The submission loop is added in the next step.
+	loops := []loop{{name: "documents", step: documents.Step}}
 
 	health := &http.Server{
 		Addr:              ":" + cfg.HealthPort,

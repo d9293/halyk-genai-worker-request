@@ -41,7 +41,23 @@ internal/app        wiring, start and orderly shutdown
 internal/config     the only package that reads configuration
 internal/runner     repeats a loop's rounds, with backoff when idle
 internal/client/integrator  typed client for Integrator.Api's /internal/v1 worker API
+internal/source     streamed download of a document link, with a size limit
+internal/storage/s3 streamed multipart upload to S3 / MinIO
+internal/usecase/document   the document loop: claim → copy (with claim renewal) → complete / failure
 ```
 
-Coming next: `source`, `storage/s3`, `usecase/document`, `client/ai`,
-`usecase/submission`.
+Copies are stored as
+`{bucket}/{operation}/{YYYY-MM-DD}/{requestGuid}-{position}-{uploadId}{ext}`, e.g.
+`s3://bpm-bucket/register-compare/2026-10-18/dddd…-0-8f3a2c1e.pdf`. The upload
+ID makes every copy a new object, so a retry never overwrites an earlier one.
+
+Coming next: `client/ai`, `usecase/submission`.
+
+### Storage test
+
+Against the local MinIO (writes under `test/worker-request/`):
+
+```sh
+S3_TEST_ENDPOINT=http://localhost:9000 S3_TEST_BUCKET=bpm-bucket \
+S3_TEST_ACCESS_KEY_ID=… S3_TEST_SECRET_ACCESS_KEY=… go test ./internal/storage/s3/
+```

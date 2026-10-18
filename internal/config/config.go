@@ -21,7 +21,23 @@ type Config struct {
 
 	Integrator IntegratorConfig
 	Loop       LoopConfig
+	Documents  DocumentsConfig
 	S3         S3Config
+}
+
+// DocumentsConfig controls copying documents Attstore → S3.
+type DocumentsConfig struct {
+	// BatchSize documents are claimed per round; Workers of them copy at once.
+	BatchSize int `env:"DOCUMENT_BATCH_SIZE,required"`
+	Workers   int `env:"DOCUMENT_WORKERS,required"`
+	// RenewEvery extends the claim while copying; about a quarter of the lease.
+	RenewEvery time.Duration `env:"DOCUMENT_RENEW_EVERY,required"`
+	// MaxCopyDuration gives up on one copy after this long.
+	MaxCopyDuration time.Duration `env:"DOCUMENT_MAX_COPY_DURATION,required"`
+	// MaxBytes is the biggest document accepted.
+	MaxBytes int64 `env:"DOCUMENT_MAX_BYTES,required"`
+	// SourceHeaderTimeout bounds the wait for the source to start answering.
+	SourceHeaderTimeout time.Duration `env:"SOURCE_HEADER_TIMEOUT,required"`
 }
 
 type IntegratorConfig struct {
@@ -47,6 +63,8 @@ type S3Config struct {
 	Bucket          string `env:"AWS_BUCKET,required"`
 	AccessKeyID     string `env:"AWS_ACCESS_KEY_ID,required"`
 	SecretAccessKey string `env:"AWS_SECRET_ACCESS_KEY,required"`
+	// PartSize is the multipart chunk; each copy in progress holds about one part in memory.
+	PartSize uint64 `env:"S3_PART_SIZE,required"`
 }
 
 // Load reads the env file into the process environment, then parses the
