@@ -23,7 +23,7 @@ import (
 	"github.com/d9293/halyk-genai-worker-request/internal/source"
 )
 
-//go:generate moq -out mocks_test.go . integratorClient downloader store
+//go:generate go run github.com/matryer/moq@v0.8.1 -out mocks_test.go . integratorClient downloader store
 
 type integratorClient interface {
 	ClaimDocuments(ctx context.Context, limit int) ([]integrator.ClaimedDocument, error)
