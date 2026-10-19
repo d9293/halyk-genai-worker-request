@@ -23,7 +23,7 @@ import (
 	"github.com/d9293/halyk-genai-worker-request/internal/source"
 )
 
-//go:generate go run github.com/matryer/moq@v0.8.1 -out mocks_test.go . integratorClient downloader store
+//go:generate go run github.com/matryer/moq@v0.5.3 -out mocks_test.go . integratorClient downloader store
 
 type integratorClient interface {
 	ClaimDocuments(ctx context.Context, limit int) ([]integrator.ClaimedDocument, error)
@@ -78,10 +78,12 @@ func (l *Loop) Step(ctx context.Context) (bool, error) {
 	var wg sync.WaitGroup
 	for _, d := range docs {
 		slots <- struct{}{}
-		wg.Go(func() {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
 			defer func() { <-slots }()
 			l.process(ctx, d)
-		})
+		}()
 	}
 	wg.Wait()
 	return true, nil
